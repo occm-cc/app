@@ -496,6 +496,9 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		} else {
 			loadDefaultStatusVisibility(savedInstanceState);
 		}
+		if(isSelfProtected() && (statusVisibility==StatusPrivacy.PUBLIC || statusVisibility==StatusPrivacy.UNLISTED)){
+			statusVisibility=StatusPrivacy.PRIVATE;
+		}
 
 		updateVisibilityIcon();
 		visibilityPopup.getMenu().findItem(switch(statusVisibility){
@@ -1640,6 +1643,11 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		if(isInstancePixelfed()){
 			m.findItem(R.id.vis_private).setVisible(false);
 		}
+		if(isSelfProtected()){
+			// occm: protected accounts can't post publicly - the server would turn it into followers-only
+			m.findItem(R.id.vis_public).setVisible(false);
+			m.findItem(R.id.vis_unlisted).setVisible(false);
+		}
 		MenuItem localOnlyItem=visibilityPopup.getMenu().findItem(R.id.local_only);
 		AccountLocalPreferences prefs=AccountSessionManager.get(accountID).getLocalPreferences();
 		boolean prefsSaysSupported=prefs.localOnlySupported;
@@ -1725,6 +1733,11 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 			return true;
 		});
 		menu.show();
+	}
+
+	private boolean isSelfProtected(){
+		Account self=AccountSessionManager.get(accountID).self;
+		return self!=null && self.protectedAccount;
 	}
 
 	private void loadDefaultStatusVisibility(Bundle savedInstanceState) {

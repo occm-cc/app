@@ -720,7 +720,17 @@ public class ProfileFragment extends LoaderFragment implements OnBackPressedList
 			domain=AccountSessionManager.get(accountID).domain;
 		usernameDomain.setText(domain);
 
-		lockIcon.setVisibility(account.locked ? View.VISIBLE : View.GONE);
+		// occm: protected accounts get a shield instead of the lock, like the web's protection icon
+		lockIcon.setVisibility(account.locked || account.protectedAccount ? View.VISIBLE : View.GONE);
+		lockIcon.setImageResource(account.protectedAccount ? R.drawable.ic_fluent_shield_24_regular : R.drawable.ic_fluent_lock_closed_20_filled);
+		lockIcon.setContentDescription(getString(account.protectedAccount ? R.string.protected_account_info : R.string.manually_approves_followers));
+		lockIcon.setImportantForAccessibility(account.protectedAccount ? View.IMPORTANT_FOR_ACCESSIBILITY_YES : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+		if(account.protectedAccount){
+			lockIcon.setOnClickListener(v->Toast.makeText(getActivity(), R.string.protected_account_info, Toast.LENGTH_LONG).show());
+		}else{
+			lockIcon.setOnClickListener(null);
+			lockIcon.setClickable(false);
+		}
 		lockIcon.setImageTintList(ColorStateList.valueOf(username.getCurrentTextColor()));
 
 		botIcon.setVisibility(account.bot ? View.VISIBLE : View.GONE);

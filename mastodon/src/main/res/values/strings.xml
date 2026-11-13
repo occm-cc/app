@@ -10,6 +10,14 @@
 	<string name="dm_pending_invite">Invited</string>
 	<string name="announcements_server">Server announcements</string>
 	<string name="announcements_account">Announcements from people you follow</string>
+	<string name="protected_account">Protect account</string>
+	<string name="protected_account_summary">Only approved followers on this server can see your posts</string>
+	<string name="protected_account_info">This is a protected account. Only approved local followers can see its posts.</string>
+	<string name="protected_account_enable_message">Only approved local followers can see your posts. Discovery and search indexing are disabled, your existing and future posts become followers-only, interactions with non-followers stay hidden without notifications, and the account does not federate with other servers. When protection is disabled, affected posts return to their previous public or unlisted visibility.</string>
+	<string name="protected_account_disable_message">Your posts that were made followers-only by protection return to their previous public or unlisted visibility, and your default post visibility becomes unlisted.</string>
+	<string name="protected_account_enable">Protect</string>
+	<string name="protected_account_disable">Turn off protection</string>
+	<string name="protected_account_forced">Controlled by protected account</string>
 	<string name="dm_new_messages">%d new messages</string>
 	<string name="dm_attach_image">Attach image</string>
 	<string name="dm_emoji">Emoji</string>

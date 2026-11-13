@@ -75,6 +75,11 @@ public class Account extends BaseModel implements Searchable{
 	 */
 	public boolean locked;
 	/**
+	 * occm: protected account - only approved local followers can see its posts; public/unlisted
+	 * posts become followers-only and it doesn't federate. Implies locked.
+	 */
+	public boolean protectedAccount;
+	/**
 	 * Custom emoji entities to be used when rendering the profile. If none, an empty array will be returned.
 	 */
 	public List<Emoji> emojis;
