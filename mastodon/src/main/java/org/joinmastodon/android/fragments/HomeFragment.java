@@ -28,9 +28,11 @@ import org.joinmastodon.android.GlobalUserPreferences;
 import org.joinmastodon.android.R;
 import org.joinmastodon.android.api.session.AccountSession;
 import org.joinmastodon.android.api.session.AccountSessionManager;
+import org.joinmastodon.android.api.DmStreamingManager;
 import org.joinmastodon.android.api.requests.dm.GetDmUnreadCount;
 import org.joinmastodon.android.events.DmPushReceivedEvent;
 import org.joinmastodon.android.events.DmRoomsChangedEvent;
+import org.joinmastodon.android.events.DmStreamMessageEvent;
 import org.joinmastodon.android.events.NotificationsMarkerUpdatedEvent;
 import org.joinmastodon.android.events.StatusDisplaySettingsChangedEvent;
 import org.joinmastodon.android.fragments.discover.DiscoverFragment;
@@ -75,6 +77,7 @@ public class HomeFragment extends AppKitFragment implements OnBackPressedListene
 	@IdRes
 	private int currentTab=R.id.tab_home;
 	private TextView notificationsBadge, dmBadge;
+	private boolean dmStreamAcquired;
 
 	private String accountID;
 
@@ -367,6 +370,27 @@ public class HomeFragment extends AppKitFragment implements OnBackPressedListene
 		super.onShown();
 		reloadNotificationsForUnreadCount();
 		reloadDmUnreadCount();
+		// keeps the DM badge live on every tab
+		if(!dmStreamAcquired){
+			dmStreamAcquired=true;
+			DmStreamingManager.get(accountID).acquire();
+		}
+	}
+
+	@Override
+	protected void onHidden(){
+		super.onHidden();
+		if(dmStreamAcquired){
+			dmStreamAcquired=false;
+			DmStreamingManager.get(accountID).release();
+		}
+	}
+
+	@Subscribe
+	public void onDmStreamMessage(DmStreamMessageEvent ev){
+		if(!ev.accountID.equals(accountID)) return;
+		if(ev.message.account==null || !ev.message.account.id.equals(AccountSessionManager.get(accountID).self.id))
+			reloadDmUnreadCount();
 	}
 
 	/** occm: the DM tab shows how many rooms have unread messages. */

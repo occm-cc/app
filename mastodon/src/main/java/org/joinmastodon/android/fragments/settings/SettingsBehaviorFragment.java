@@ -9,6 +9,7 @@ import android.widget.TextView;
 
 import org.joinmastodon.android.GlobalUserPreferences;
 import org.joinmastodon.android.R;
+import org.joinmastodon.android.api.DmStreamingManager;
 import org.joinmastodon.android.api.session.AccountLocalPreferences;
 import org.joinmastodon.android.api.session.AccountSession;
 import org.joinmastodon.android.api.session.AccountSessionManager;
@@ -40,7 +41,7 @@ public class SettingsBehaviorFragment extends BaseSettingsFragment<Void> impleme
 	private CheckableListItem<Void> remoteLoadingItem, showBoostsItem, showRepliesItem, loadNewPostsItem, seeNewPostsBtnItem, overlayMediaItem;
 
 	// MOSHIDON
-    private CheckableListItem<Void> mentionRebloggerAutomaticallyItem, hapticFeedbackItem, showPostsWithoutAltItem;
+    private CheckableListItem<Void> mentionRebloggerAutomaticallyItem, hapticFeedbackItem, showPostsWithoutAltItem, dmRealtimeItem;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState){
@@ -65,6 +66,7 @@ public class SettingsBehaviorFragment extends BaseSettingsFragment<Void> impleme
 				loadNewPostsItem=new CheckableListItem<>(R.string.sk_settings_load_new_posts, 0, CheckableListItem.Style.SWITCH, GlobalUserPreferences.loadNewPosts, R.drawable.ic_fluent_arrow_sync_24_regular, i->onLoadNewPostsClick()),
 				seeNewPostsBtnItem=new CheckableListItem<>(R.string.sk_settings_see_new_posts_button, 0, CheckableListItem.Style.SWITCH, GlobalUserPreferences.showNewPostsButton, R.drawable.ic_fluent_arrow_up_24_regular, i->toggleCheckableItem(seeNewPostsBtnItem)),
 				hapticFeedbackItem=new CheckableListItem<>(R.string.mo_haptic_feedback, R.string.mo_setting_haptic_feedback_summary, CheckableListItem.Style.SWITCH, GlobalUserPreferences.hapticFeedback, R.drawable.ic_fluent_phone_vibrate_24_regular, i->toggleCheckableItem(hapticFeedbackItem)),
+				dmRealtimeItem=new CheckableListItem<>(R.string.dm_settings_realtime, R.string.dm_settings_realtime_summary, CheckableListItem.Style.SWITCH, GlobalUserPreferences.dmRealtime, R.drawable.ic_fluent_chat_24_regular, i->toggleCheckableItem(dmRealtimeItem)),
 				remoteLoadingItem=new CheckableListItem<>(R.string.sk_settings_allow_remote_loading, R.string.sk_settings_allow_remote_loading_explanation, CheckableListItem.Style.SWITCH, GlobalUserPreferences.allowRemoteLoading, R.drawable.ic_fluent_communication_24_regular, i->toggleCheckableItem(remoteLoadingItem)),
 				mentionRebloggerAutomaticallyItem=new CheckableListItem<>(R.string.mo_mention_reblogger_automatically, 0, CheckableListItem.Style.SWITCH, GlobalUserPreferences.mentionRebloggerAutomatically, R.drawable.ic_fluent_comment_mention_24_regular, i->toggleCheckableItem(mentionRebloggerAutomaticallyItem), true),
 				showBoostsItem=new CheckableListItem<>(R.string.sk_settings_show_boosts, 0, CheckableListItem.Style.SWITCH, lp.showBoosts, R.drawable.ic_fluent_arrow_repeat_all_24_regular, i->toggleCheckableItem(showBoostsItem)),
@@ -216,6 +218,10 @@ public class SettingsBehaviorFragment extends BaseSettingsFragment<Void> impleme
 		GlobalUserPreferences.mentionRebloggerAutomatically=mentionRebloggerAutomaticallyItem.checked;
 		GlobalUserPreferences.hapticFeedback=hapticFeedbackItem.checked;
 		GlobalUserPreferences.showPostsWithoutAlt=showPostsWithoutAltItem.checked;
+		if(GlobalUserPreferences.dmRealtime!=dmRealtimeItem.checked){
+			GlobalUserPreferences.dmRealtime=dmRealtimeItem.checked;
+			DmStreamingManager.onSettingChanged();
+		}
 		AccountLocalPreferences lp=getLocalPrefs();
 		boolean restartPlease=lp.showBoosts!=showBoostsItem.checked
 				|| lp.showReplies!=showRepliesItem.checked || GlobalUserPreferences.playGifs!=playGifsItem.checked;

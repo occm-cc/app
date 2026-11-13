@@ -32,6 +32,7 @@ import java.util.List;
 
 import org.joinmastodon.android.E;
 import org.joinmastodon.android.R;
+import org.joinmastodon.android.api.DmStreamingManager;
 import org.joinmastodon.android.api.MastodonAPIRequest;
 import org.joinmastodon.android.api.requests.dm.AddDmChatRoomMembers;
 import org.joinmastodon.android.api.requests.dm.DeleteDmMessage;
@@ -39,11 +40,13 @@ import org.joinmastodon.android.api.requests.dm.GetDmChatRoom;
 import org.joinmastodon.android.api.requests.dm.UpdateDmChatRoom;
 import org.joinmastodon.android.api.requests.dm.GetDmChatRoomMessages;
 import org.joinmastodon.android.api.requests.dm.MarkDmChatRoomRead;
+import org.joinmastodon.android.api.requests.dm.RemoveDmChatRoomMember;
 import org.joinmastodon.android.api.requests.dm.SendDmMessage;
 import org.joinmastodon.android.api.requests.statuses.UploadAttachment;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.events.DmPushReceivedEvent;
 import org.joinmastodon.android.events.DmRoomsChangedEvent;
+import org.joinmastodon.android.events.DmStreamMessageEvent;
 import org.joinmastodon.android.fragments.ProfileFragment;
 import org.joinmastodon.android.model.Account;
 import org.joinmastodon.android.fragments.MastodonRecyclerFragment;
@@ -115,6 +118,7 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 	private int uploadingCount=0;
 	private final Handler pollHandler=new Handler(Looper.getMainLooper());
 	private final Runnable pollRunnable=this::pollForNewMessages;
+	private boolean streamAcquired;
 
 	public DmChatRoomFragment(){
 		super(R.layout.fragment_dm_chat_room, 20);
@@ -243,13 +247,67 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 		new M3AlertDialogBuilder(getActivity())
 				.setTitle(R.string.dm_members)
 				.setItems(names, (dlg, which)->{
-					Bundle args=new Bundle();
-					args.putString("account", accountID);
-					args.putParcelable("profileAccount", Parcels.wrap(members.get(which)));
-					Nav.go(getActivity(), ProfileFragment.class, args);
+					Account member=members.get(which);
+					boolean canRemove=isOwner() && room.roomType==DmChatRoom.RoomType.GROUP_CHAT && !member.id.equals(myAccountId);
+					if(!canRemove){
+						openProfile(member);
+						return;
+					}
+					new M3AlertDialogBuilder(getActivity())
+							.setTitle(!TextUtils.isEmpty(member.displayName) ? member.displayName : member.username)
+							.setItems(new String[]{getString(R.string.dm_view_profile), getString(R.string.dm_remove_member)}, (d2, which2)->{
+								if(which2==0) openProfile(member);
+								else confirmRemoveMember(member);
+							})
+							.show();
 				})
 				.setPositiveButton(R.string.ok, null)
 				.show();
+	}
+
+	private void openProfile(Account account){
+		Bundle args=new Bundle();
+		args.putString("account", accountID);
+		args.putParcelable("profileAccount", Parcels.wrap(account));
+		Nav.go(getActivity(), ProfileFragment.class, args);
+	}
+
+	private void confirmRemoveMember(Account member){
+		String name=!TextUtils.isEmpty(member.displayName) ? member.displayName : member.username;
+		new M3AlertDialogBuilder(getActivity())
+				.setTitle(R.string.dm_remove_member)
+				.setMessage(getString(R.string.dm_remove_member_confirm, name))
+				.setPositiveButton(R.string.dm_remove_member, (dlg, which)->new RemoveDmChatRoomMember(roomUuid, member.id)
+						.setCallback(new Callback<>(){
+							@Override
+							public void onSuccess(Object result){
+								if(getActivity()==null) return;
+								reloadRoom();
+							}
+
+							@Override
+							public void onError(ErrorResponse error){
+								if(getActivity()!=null) error.showToast(getActivity());
+							}
+						})
+						.wrapProgress(getActivity(), R.string.loading, true)
+						.exec(accountID))
+				.setNegativeButton(R.string.cancel, null)
+				.show();
+	}
+
+	private void reloadRoom(){
+		new GetDmChatRoom(roomUuid).setCallback(new Callback<>(){
+			@Override
+			public void onSuccess(DmChatRoom result){
+				if(getActivity()==null) return;
+				onRoomLoaded(result);
+				E.post(new DmRoomsChangedEvent(accountID));
+			}
+
+			@Override
+			public void onError(ErrorResponse error){}
+		}).exec(accountID);
 	}
 
 	private void showRenameDialog(){
@@ -447,6 +505,10 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 		super.onShown();
 		if(!loaded && !dataLoading)
 			loadData();
+		if(!streamAcquired){
+			streamAcquired=true;
+			DmStreamingManager.get(accountID).acquire();
+		}
 		pollHandler.removeCallbacks(pollRunnable);
 		pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
 	}
@@ -454,7 +516,55 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 	@Override
 	protected void onHidden(){
 		super.onHidden();
+		releaseStream();
 		pollHandler.removeCallbacks(pollRunnable);
+	}
+
+	private void releaseStream(){
+		if(streamAcquired){
+			streamAcquired=false;
+			DmStreamingManager.get(accountID).release();
+		}
+	}
+
+	@Subscribe
+	public void onDmStreamMessage(DmStreamMessageEvent ev){
+		if(!ev.accountID.equals(accountID) || !roomUuid.equals(ev.message.dmChatRoomUuid) || getActivity()==null)
+			return;
+		addIncomingMessages(List.of(ev.message));
+	}
+
+	/**
+	 * Merges messages that arrived via streaming, polling or our own send into the list, skipping
+	 * ones already shown (the same message can come from more than one of those).
+	 */
+	private void addIncomingMessages(List<DmMessage> incoming){
+		List<DmMessage> fresh=new ArrayList<>();
+		for(DmMessage m:incoming){
+			boolean known=false;
+			for(DmMessage existing:data){
+				if(existing.id.equals(m.id)){
+					known=true;
+					break;
+				}
+			}
+			if(!known) fresh.add(m);
+		}
+		if(fresh.isEmpty()) return;
+		boolean onlyMine=fresh.stream().allMatch(m->m.account!=null && myAccountId.equals(m.account.id));
+		boolean wasAtLatest=isAtLatestMessage();
+		data.addAll(0, fresh);
+		sortAndRefreshList();
+		if(wasAtLatest || onlyMine){
+			list.scrollToPosition(0);
+			if(!onlyMine) markRead();
+		}else{
+			// User scrolled up to read history - don't yank them back down, just
+			// let them know new messages arrived below.
+			pendingNewMessageCount+=fresh.size();
+			newMessagesPill.setText(getString(R.string.dm_new_messages, pendingNewMessageCount));
+			newMessagesPill.setVisibility(View.VISIBLE);
+		}
 	}
 
 	@Override
@@ -466,6 +576,7 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 	@Override
 	public void onDestroy(){
 		super.onDestroy();
+		releaseStream();
 		E.unregister(this);
 	}
 
@@ -482,38 +593,16 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 	/** Lightweight polling stand-in for real-time updates - there's no streaming channel for DMs. */
 	private void pollForNewMessages(){
 		if(getActivity()==null) return;
+		if(DmStreamingManager.get(accountID).isConnected()){
+			// the stream delivers new messages; just keep checking in case it drops
+			pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
+			return;
+		}
 		new GetDmChatRoomMessages(roomUuid, null, 20).setCallback(new Callback<>(){
 			@Override
 			public void onSuccess(HeaderPaginationList<DmMessage> result){
 				if(getActivity()==null) return;
-				List<DmMessage> freshMessages=new ArrayList<>();
-				for(DmMessage m : result){
-					boolean alreadyShown=false;
-					for(DmMessage existing : data){
-						if(existing.id.equals(m.id)){
-							alreadyShown=true;
-							break;
-						}
-					}
-					if(alreadyShown)
-						break;
-					freshMessages.add(m);
-				}
-				if(!freshMessages.isEmpty()){
-					boolean wasAtLatest=isAtLatestMessage();
-					data.addAll(0, freshMessages);
-					sortAndRefreshList();
-					if(wasAtLatest){
-						list.scrollToPosition(0);
-						markRead();
-					}else{
-						// User scrolled up to read history - don't yank them back down, just
-						// let them know new messages arrived below.
-						pendingNewMessageCount+=freshMessages.size();
-						newMessagesPill.setText(getString(R.string.dm_new_messages, pendingNewMessageCount));
-						newMessagesPill.setVisibility(View.VISIBLE);
-					}
-				}
+				addIncomingMessages(result);
 				pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
 			}
 
@@ -539,8 +628,8 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 				pendingMediaIds.clear();
 				mediaPreviewContainer.removeAllViews();
 				mediaPreviewRow.setVisibility(View.GONE);
-				data.add(0, message);
-				sortAndRefreshList();
+				// the stream may already have delivered it
+				addIncomingMessages(List.of(message));
 				scrollToLatestAndClearPill();
 			}
 

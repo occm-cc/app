@@ -39,6 +39,11 @@
 	<string name="dm_delete_message_confirm">대화방의 모든 사람에게서 이 메시지를 삭제할까요?</string>
 	<string name="dm_send_message">메시지 보내기</string>
 	<string name="dm_owner">방장</string>
+	<string name="dm_view_profile">프로필 보기</string>
+	<string name="dm_remove_member">대화방에서 내보내기</string>
+	<string name="dm_remove_member_confirm">%s 님을 이 대화방에서 내보낼까요?</string>
+	<string name="dm_settings_realtime">DM 실시간 갱신</string>
+	<string name="dm_settings_realtime_summary">DM을 보고 있는 동안 새 메시지를 바로 표시합니다. 끄면 몇 초마다 확인합니다.</string>
 	<string name="welcome_occm_title">환영합니다</string>
 	<string name="welcome_occm_body">occm.cc 계정으로 로그인합니다.</string>
 

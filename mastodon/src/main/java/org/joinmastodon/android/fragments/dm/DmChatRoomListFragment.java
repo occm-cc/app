@@ -16,11 +16,13 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.joinmastodon.android.E;
 import org.joinmastodon.android.R;
+import org.joinmastodon.android.api.DmStreamingManager;
 import org.joinmastodon.android.api.MastodonAPIRequest;
 import org.joinmastodon.android.api.requests.dm.GetDmChatRooms;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.events.DmPushReceivedEvent;
 import org.joinmastodon.android.events.DmRoomsChangedEvent;
+import org.joinmastodon.android.events.DmStreamMessageEvent;
 import org.joinmastodon.android.fragments.MastodonRecyclerFragment;
 import org.joinmastodon.android.model.Account;
 import org.joinmastodon.android.model.HeaderPaginationList;
@@ -52,6 +54,7 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 	private DmChatRoomAdapter adapter;
 	private final Handler pollHandler=new Handler(Looper.getMainLooper());
 	private final Runnable pollRunnable=this::pollRunnableTick;
+	private boolean streamAcquired;
 
 	public DmChatRoomListFragment(){
 		super(20);
@@ -104,6 +107,7 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 	@Override
 	public void onDestroy(){
 		super.onDestroy();
+		releaseStream();
 		E.unregister(this);
 	}
 
@@ -130,6 +134,10 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 		super.onShown();
 		if(!getArguments().getBoolean("noAutoLoad") && !loaded && !dataLoading)
 			loadData();
+		if(!streamAcquired){
+			streamAcquired=true;
+			DmStreamingManager.get(accountID).acquire();
+		}
 		pollHandler.removeCallbacks(pollRunnable);
 		pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
 	}
@@ -137,7 +145,40 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 	@Override
 	protected void onHidden(){
 		super.onHidden();
+		releaseStream();
 		pollHandler.removeCallbacks(pollRunnable);
+	}
+
+	private void releaseStream(){
+		if(streamAcquired){
+			streamAcquired=false;
+			DmStreamingManager.get(accountID).release();
+		}
+	}
+
+	@Subscribe
+	public void onDmStreamMessage(DmStreamMessageEvent ev){
+		if(!ev.accountID.equals(accountID) || getActivity()==null)
+			return;
+		DmChatRoom room=null;
+		for(DmChatRoom r:data){
+			if(r.uuid.equals(ev.message.dmChatRoomUuid)){
+				room=r;
+				break;
+			}
+		}
+		if(room==null){
+			// a room we don't have yet (e.g. a new invite)
+			if(!dataLoading) onRefresh();
+			return;
+		}
+		room.lastMessage=ev.message;
+		room.lastMessageAt=ev.message.createdAt;
+		if(ev.message.account==null || !myAccountId.equals(ev.message.account.id))
+			room.unread=true;
+		data.remove(room);
+		data.add(0, room);
+		adapter.notifyDataSetChanged();
 	}
 
 	@Override
@@ -149,7 +190,7 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 	/** Lightweight polling stand-in for real-time updates - there's no streaming channel for DMs. */
 	private void pollRunnableTick(){
 		if(getActivity()==null) return;
-		if(!dataLoading)
+		if(!dataLoading && !DmStreamingManager.get(accountID).isConnected())
 			onRefresh();
 		pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
 	}

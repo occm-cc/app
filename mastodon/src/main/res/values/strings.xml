@@ -41,6 +41,11 @@
 	<string name="dm_delete_message_confirm">Delete this message for everyone in the conversation?</string>
 	<string name="dm_send_message">Send message</string>
 	<string name="dm_owner">Owner</string>
+	<string name="dm_view_profile">View profile</string>
+	<string name="dm_remove_member">Remove from conversation</string>
+	<string name="dm_remove_member_confirm">Remove %s from this conversation?</string>
+	<string name="dm_settings_realtime">Real-time DMs</string>
+	<string name="dm_settings_realtime_summary">Show new direct messages instantly while DMs are open. When off, they\'re checked every few seconds.</string>
 	<string name="welcome_occm_title">Welcome</string>
 	<string name="welcome_occm_body">Sign in with your occm.cc account.</string>
 

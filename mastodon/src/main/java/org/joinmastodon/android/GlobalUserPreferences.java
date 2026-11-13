@@ -81,6 +81,8 @@ public class GlobalUserPreferences{
 	public static boolean showPostsWithoutAlt;
 	public static boolean showMediaPreview;
 	public static boolean removeTrackingParams;
+	/** occm: keep a streaming connection for DMs while DM screens are open (falls back to polling) */
+	public static boolean dmRealtime;
 	public static boolean enhanceTextSize;
 
 	public static SharedPreferences getPrefs(){
@@ -162,6 +164,7 @@ public class GlobalUserPreferences{
 		showPostsWithoutAlt=prefs.getBoolean("showPostsWithoutAlt", true);
 		showMediaPreview=prefs.getBoolean("showMediaPreview", true);
 		removeTrackingParams=prefs.getBoolean("removeTrackingParams", true);
+		dmRealtime=prefs.getBoolean("dmRealtime", true);
 		enhanceTextSize=prefs.getBoolean("enhanceTextSize", false);
 
 		theme=ThemePreference.values()[prefs.getInt("theme", 0)];
@@ -236,6 +239,7 @@ public class GlobalUserPreferences{
 				.putBoolean("showPostsWithoutAlt", showPostsWithoutAlt)
 				.putBoolean("showMediaPreview", showMediaPreview)
 				.putBoolean("removeTrackingParams", removeTrackingParams)
+				.putBoolean("dmRealtime", dmRealtime)
 				.putBoolean("enhanceTextSize", enhanceTextSize)
 
 				.apply();
