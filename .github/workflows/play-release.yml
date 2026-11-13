@@ -1,0 +1,74 @@
+name: Play Store release bundle
+
+# Builds the signed .aab for Google Play. Runs on the same release tags as the F-Droid build
+# (and can be started by hand: Actions > this workflow > Run workflow); download the
+# "play-release-aab" artifact from the run and upload it in Play Console. The bundle is kept as a
+# run artifact rather than attached to the public GitHub release.
+#
+# Secrets used:
+# - RELEASE_KEYSTORE (+ RELEASE_SIGNING_STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD): the same key
+#   the F-Droid release workflow signs with, which is also the Play upload key.
+# - GOOGLE_SERVICES_JSON: base64 of mastodon/google-services.json (Firebase config for FCM push,
+#   Crashlytics, Analytics). Without it the bundle still builds, but Firebase stays uninitialized.
+
+on:
+  push:
+    tags:
+      - '*.occmdm'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Restore signing key and Firebase config
+      env:
+        RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      run: |
+        mkdir -p mastodon/keystore
+        echo "$RELEASE_KEYSTORE" | base64 -d > mastodon/keystore/release_keystore.jks
+        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          echo "$GOOGLE_SERVICES_JSON" | base64 -d > mastodon/google-services.json
+        else
+          echo "::warning::GOOGLE_SERVICES_JSON secret is not set - Firebase (FCM push, Crashlytics) will not work in this build"
+        fi
+
+    - name: Build playRelease bundle
+      run: ./gradlew bundlePlayRelease
+      env:
+        RELEASE_SIGNING_STORE_PASSWORD: ${{ secrets.RELEASE_SIGNING_STORE_PASSWORD }}
+        RELEASE_SIGNING_KEY_ALIAS: ${{ secrets.RELEASE_SIGNING_KEY_ALIAS }}
+        RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
+
+    # Refuse to hand out a bundle signed with anything but the registered upload key.
+    - name: Check upload key fingerprint
+      run: |
+        expected="2B:17:6E:C7:C6:AC:3C:81:58:CA:F4:B0:0E:97:94:29:1A:2A:F2:87:98:5B:FB:2B:8E:5E:9E:E8:E1:06:6A:94"
+        actual=$(keytool -printcert -jarfile mastodon/build/outputs/bundle/playRelease/occm-playRelease.aab | grep -m1 "SHA256:" | awk '{print $2}')
+        echo "signer SHA-256: $actual"
+        [ "$actual" = "$expected" ] || { echo "::error::bundle is not signed with the Play upload key"; exit 1; }
+
+    - name: Remove signing key and Firebase config
+      if: always()
+      run: rm -f mastodon/keystore/release_keystore.jks mastodon/google-services.json
+
+    - name: Upload bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: play-release-aab
+        path: mastodon/build/outputs/bundle/playRelease/occm-playRelease.aab
+        retention-days: 1
