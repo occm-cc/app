@@ -1,0 +1,1 @@
+Updated to target Android 16 (API level 36), as required by Google Play.

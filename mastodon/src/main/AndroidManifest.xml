@@ -45,7 +45,12 @@
 		android:icon="@mipmap/ic_launcher"
 		android:theme="@style/Theme.Mastodon.AutoLightDark"
 		android:windowSoftInputMode="adjustPan"
-		android:largeHeap="true">
+		android:largeHeap="true"
+		android:enableOnBackInvokedCallback="false">
+		<!-- enableOnBackInvokedCallback=false: back navigation (fragment stack, compose discard
+			confirmation, etc.) goes through onBackPressed(). Since targeting Android 16 (API 36),
+			apps that don't opt out no longer get onBackPressed() and back would just close the
+			activity. -->
 
 		<!-- We only use Firebase Analytics for basic install/session/login counts, not ad
 		     attribution - no-ops on variants without Firebase, harmless either way. -->
