@@ -25,6 +25,8 @@ public class Announcement extends BaseModel implements DisplayItemsParent {
 	public List<EmojiReaction> reactions;
     public List<Mention> mentions;
     public List<Hashtag> tags;
+    /** occm: author of a follower announcement; null for server-wide announcements */
+    public Account account;
 
     @Override
     public String toString() {
@@ -48,6 +50,11 @@ public class Announcement extends BaseModel implements DisplayItemsParent {
 	public void postprocess() throws ObjectValidationException{
 		super.postprocess();
 		if(reactions==null) reactions=new ArrayList<>();
+		if(account!=null) account.postprocess();
+	}
+
+	public boolean isServerWide(){
+		return account==null;
 	}
 
 	public Status toStatus(boolean isIceshrimp) {

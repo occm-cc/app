@@ -6,6 +6,8 @@
 	<string name="dm_tab_label">DM</string>
 	<string name="dm_no_messages_yet">아직 메시지가 없습니다</string>
 	<string name="dm_pending_invite">초대됨</string>
+	<string name="announcements_server">서버 공지</string>
+	<string name="announcements_account">팔로우한 계정의 공지</string>
 	<string name="dm_new_messages">새 메시지 %d개</string>
 	<string name="dm_attach_image">이미지 첨부</string>
 	<string name="dm_emoji">에모지</string>

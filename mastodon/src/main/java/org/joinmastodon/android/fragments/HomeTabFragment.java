@@ -42,6 +42,7 @@ import org.joinmastodon.android.E;
 import org.joinmastodon.android.GlobalUserPreferences;
 import org.joinmastodon.android.R;
 import org.joinmastodon.android.api.requests.announcements.GetAnnouncements;
+import org.joinmastodon.android.events.AccountFollowChangedEvent;
 import org.joinmastodon.android.api.requests.lists.GetLists;
 import org.joinmastodon.android.api.requests.tags.GetFollowedHashtags;
 import org.joinmastodon.android.api.session.AccountSessionManager;
@@ -83,7 +84,7 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 	private static final int ANNOUNCEMENTS_RESULT = 654;
 
 	private String accountID;
-	private MenuItem announcements, announcementsAction, settings, settingsAction;
+	private MenuItem announcements, announcementsAction, accountAnnouncements, accountAnnouncementsAction, settings, settingsAction;
 //	private ImageView toolbarLogo;
 	private Button toolbarShowNewPostsBtn;
 	private boolean newPostsBtnShown;
@@ -107,6 +108,8 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 	private PopupMenu overflowPopup;
 	private View overflowActionView = null;
 	private boolean announcementsBadged, settingsBadged;
+	// occm: follower announcements are listed separately from server-wide ones, like on the web
+	private boolean accountAnnouncementsBadged, hasAccountAnnouncements;
 	private ImageButton fab;
 	private ElevationOnScrollListener elevationOnScrollListener;
 
@@ -292,22 +295,39 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 			}
 		}).exec(accountID);
 
+		loadAnnouncements(true);
+	}
+
+	private void loadAnnouncements(boolean showErrors){
 		new GetAnnouncements(false).setCallback(new Callback<>() {
 			@Override
 			public void onSuccess(List<Announcement> result) {
 				if(getActivity()==null) return;
-				if (result.stream().anyMatch(a -> !a.read)) {
-					announcementsBadged = true;
-					announcements.setVisible(false);
-					announcementsAction.setVisible(true);
-				}
+				announcementsBadged=result.stream().anyMatch(a -> a.isServerWide() && !a.read);
+				hasAccountAnnouncements=result.stream().anyMatch(a -> !a.isServerWide());
+				accountAnnouncementsBadged=result.stream().anyMatch(a -> !a.isServerWide() && !a.read);
+				updateAnnouncementMenuItems();
 			}
 
 			@Override
 			public void onError(ErrorResponse error) {
-				error.showToast(getActivity());
+				if(showErrors) error.showToast(getActivity());
 			}
 		}).exec(accountID);
+	}
+
+	private void updateAnnouncementMenuItems(){
+		if(announcements==null || announcementsAction==null) return; // menus not created yet
+		announcements.setVisible(!announcementsBadged);
+		announcementsAction.setVisible(announcementsBadged);
+		if(accountAnnouncements!=null) accountAnnouncements.setVisible(hasAccountAnnouncements && !accountAnnouncementsBadged);
+		if(accountAnnouncementsAction!=null) accountAnnouncementsAction.setVisible(hasAccountAnnouncements && accountAnnouncementsBadged);
+	}
+
+	@Subscribe
+	public void onAccountFollowChanged(AccountFollowChangedEvent ev){
+		// followed/unfollowed someone: their announcements appear or disappear
+		loadAnnouncements(false);
 	}
 
 	public ElevationOnScrollListener getElevationOnScrollListener() {
@@ -394,12 +414,12 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 		m.clear();
 		overflowPopup.inflate(R.menu.home_overflow);
 		announcements = m.findItem(R.id.announcements);
+		accountAnnouncements = m.findItem(R.id.account_announcements);
 		settings = m.findItem(R.id.settings);
 		hashtagsMenu = m.findItem(R.id.hashtags).getSubMenu();
 		listsMenu = m.findItem(R.id.lists).getSubMenu();
 
-		announcements.setVisible(!announcementsBadged);
-		announcementsAction.setVisible(announcementsBadged);
+		updateAnnouncementMenuItems();
 		settings.setVisible(!settingsBadged);
 		settingsAction.setVisible(settingsBadged);
 
@@ -418,6 +438,7 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 
 		menu.findItem(R.id.overflow).setActionView(overflowActionView);
 		announcementsAction = menu.findItem(R.id.announcements_action);
+		accountAnnouncementsAction = menu.findItem(R.id.account_announcements_action);
 		settingsAction = menu.findItem(R.id.settings_action);
 
 		updateOverflowMenu();
@@ -521,6 +542,10 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 		} else if (id == R.id.settings || id == R.id.settings_action) {
 			Nav.go(getActivity(), SettingsMainFragment.class, args);
 		} else if (id == R.id.announcements || id == R.id.announcements_action) {
+			args.putString("scope", AnnouncementsFragment.SCOPE_SERVER);
+			Nav.goForResult(getActivity(), AnnouncementsFragment.class, args, ANNOUNCEMENTS_RESULT, this);
+		} else if (id == R.id.account_announcements || id == R.id.account_announcements_action) {
+			args.putString("scope", AnnouncementsFragment.SCOPE_ACCOUNT);
 			Nav.goForResult(getActivity(), AnnouncementsFragment.class, args, ANNOUNCEMENTS_RESULT, this);
 		} else if (id == R.id.edit_timelines) {
 			Nav.go(getActivity(), EditTimelinesFragment.class, args);
@@ -625,9 +650,12 @@ public class HomeTabFragment extends MastodonToolbarFragment implements Scrollab
 	@Override
 	public void onFragmentResult(int reqCode, boolean success, Bundle result){
 		if (reqCode == ANNOUNCEMENTS_RESULT && success) {
-			announcementsBadged = false;
-			announcements.setVisible(true);
-			announcementsAction.setVisible(false);
+			// only clear the badge of the kind that was read
+			if (result != null && AnnouncementsFragment.SCOPE_ACCOUNT.equals(result.getString("scope")))
+				accountAnnouncementsBadged = false;
+			else
+				announcementsBadged = false;
+			updateAnnouncementMenuItems();
 		}
 	}
 
