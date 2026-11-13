@@ -1,0 +1,1 @@
+Minimum supported Android version raised to Android 7.0 (API level 24), as required by Google Play's automatic protection.
