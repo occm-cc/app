@@ -286,10 +286,13 @@ public class EmojiReactionsStatusDisplayItem extends StatusDisplayItem {
 			item.createRequest(emoji, existing==null ? 1 : existing.count, false, null, (status)->{
 				resetBtn.run();
 				if(finalExisting==null){
-					int pos=status.reactions.stream()
+					// announcement reaction endpoints return an empty body, so there's no updated
+					// status to look the position up in - append to the local list instead
+					List<EmojiReaction> serverReactions=status!=null ? status.reactions : List.of();
+					int pos=serverReactions.stream()
 							.filter(r->r.name.equals(info!=null ? info.shortcode : emoji))
 							.findFirst()
-							.map(r->status.reactions.indexOf(r))
+							.map(serverReactions::indexOf)
 							.orElse(item.status.reactions.size());
 					boolean previouslyEmpty=item.status.reactions.isEmpty();
 					item.status.reactions.add(pos, info!=null ? EmojiReaction.of(info, me) : EmojiReaction.of(emoji, me));

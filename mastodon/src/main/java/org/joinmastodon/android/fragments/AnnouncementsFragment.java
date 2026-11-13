@@ -90,7 +90,8 @@ public class AnnouncementsFragment extends BaseStatusListFragment<Announcement> 
 	@Subscribe
 	public void onAccountFollowChanged(AccountFollowChangedEvent ev){
 		// unfollowing someone from here (e.g. via their profile) removes their announcements
-		if(isAccountScope() && !ev.following) loadData();
+		// refresh() replaces the list; loadData() would append to what's already shown
+		if(isAccountScope() && !ev.following) refresh();
 	}
 
 	@Override
