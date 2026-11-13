@@ -70,6 +70,7 @@ import org.joinmastodon.android.api.MastodonErrorResponse;
 import org.joinmastodon.android.api.requests.statuses.CreateStatus;
 import org.joinmastodon.android.api.requests.statuses.DeleteStatus;
 import org.joinmastodon.android.api.requests.statuses.EditStatus;
+import org.joinmastodon.android.api.requests.statuses.UpdateScheduledStatus;
 import org.joinmastodon.android.api.session.AccountLocalPreferences;
 import org.joinmastodon.android.api.session.AccountSession;
 import org.joinmastodon.android.api.session.AccountSessionManager;
@@ -1221,6 +1222,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 						E.post(new StatusCreatedEvent(result, accountID));
 						if(replyTo!=null && !redraftStatus){
 							replyTo.repliesCount++;
+							replyTo.replied=true;
 							E.post(new StatusCountersUpdatedEvent(replyTo));
 						}
 					}else{
@@ -1268,20 +1270,36 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 			// bugs to occur because the client's clock is wrong by a minute or two - the api
 			// returns a status instead of a scheduled status if scheduled time is less than 5
 			// minutes into the future and this is 1. unexpected for the user and 2. hard to handle
-			new CreateStatus.Scheduled(req, uuid)
-					.setCallback(new Callback<>() {
-						@Override
-						public void onSuccess(ScheduledStatus result) {
-							maybeDeleteScheduledPost(() -> {
+			if(scheduledStatus!=null){
+				// occm: edit the scheduled post in place rather than delete + re-create
+				String oldID=scheduledStatus.id;
+				new UpdateScheduledStatus(oldID, req)
+						.setCallback(new Callback<>() {
+							@Override
+							public void onSuccess(ScheduledStatus result) {
+								E.post(new ScheduledStatusDeletedEvent(oldID, accountID));
 								createScheduledStatusFinish(result);
-							});
-						}
+							}
 
-						@Override
-						public void onError(ErrorResponse error) {
-							handlePublishError(error);
-						}
-					}).exec(accountID);
+							@Override
+							public void onError(ErrorResponse error) {
+								handlePublishError(error);
+							}
+						}).exec(accountID);
+			}else{
+				new CreateStatus.Scheduled(req, uuid)
+						.setCallback(new Callback<>() {
+							@Override
+							public void onSuccess(ScheduledStatus result) {
+								createScheduledStatusFinish(result);
+							}
+
+							@Override
+							public void onError(ErrorResponse error) {
+								handlePublishError(error);
+							}
+						}).exec(accountID);
+			}
 		}else{
 			new M3AlertDialogBuilder(getActivity())
 					.setTitle(R.string.sk_scheduled_too_soon_title)

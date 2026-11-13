@@ -63,6 +63,7 @@ public class FooterStatusDisplayItem extends StatusDisplayItem{
 	public static class Holder extends StatusDisplayItem.Holder<FooterStatusDisplayItem>{
 		private final TextView replies, boosts, favorites;
 		private final View reply, boost, favorite, share, bookmark;
+		private final ImageView replyIcon;
 		private final ImageView favIcon;
 		private static Animation spin;
 
@@ -101,6 +102,7 @@ public class FooterStatusDisplayItem extends StatusDisplayItem{
 			favorites=findViewById(R.id.favorite);
 
 			reply=findViewById(R.id.reply_btn);
+			replyIcon=findViewById(R.id.reply_icon);
 			boost=findViewById(R.id.boost_btn);
 			favorite=findViewById(R.id.favorite_btn);
 			share=findViewById(R.id.share_btn);
@@ -138,6 +140,10 @@ public class FooterStatusDisplayItem extends StatusDisplayItem{
 			// hence in that case displaying whether there is another reply
 			int compareTo = item.isMainStatus || !item.hasDescendantNeighbor ? 0 : 1;
 			reply.setSelected(item.status.repliesCount > compareTo);
+			// occm: highlight posts you've already replied to
+			int replyColor=UiUtils.getThemeColor(itemView.getContext(), item.status.replied ? R.attr.colorM3Primary : R.attr.colorM3OnSurfaceVariant);
+			replyIcon.setImageTintList(ColorStateList.valueOf(replyColor));
+			replies.setTextColor(replyColor);
 			boost.setSelected(item.status.reblogged);
 			favorite.setSelected(item.status.favourited);
 			bookmark.setSelected(item.status.bookmarked);

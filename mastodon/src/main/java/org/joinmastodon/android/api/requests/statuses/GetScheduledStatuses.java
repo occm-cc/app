@@ -13,4 +13,10 @@ public class GetScheduledStatuses extends HeaderPaginationRequest<ScheduledStatu
 		if(limit>0)
 			addQueryParameter("limit", limit+"");
 	}
+
+	/** occm: v2 returns normalized params (string IDs, real booleans, effective sensitive flag). */
+	@Override
+	protected String getPathPrefix(){
+		return "/api/v2";
+	}
 }

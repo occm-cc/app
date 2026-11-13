@@ -86,6 +86,8 @@ public class Status extends BaseModel implements DisplayItemsParent, Searchable{
 	public boolean reblogged;
 	public boolean muted;
 	public boolean bookmarked;
+	/** occm: whether the current user has replied to this post */
+	public boolean replied;
 	public boolean pinned;
 
 	public Status quote; // can be boolean in calckey
@@ -199,6 +201,7 @@ public class Status extends BaseModel implements DisplayItemsParent, Searchable{
 		reblogged=ev.reblogged;
 		bookmarked=ev.bookmarked;
 		pinned=ev.pinned;
+		replied=ev.replied;
 	}
 
 	public void update(StatusMuteChangedEvent ev) {
