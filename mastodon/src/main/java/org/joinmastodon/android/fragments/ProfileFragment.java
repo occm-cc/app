@@ -70,6 +70,7 @@ import org.joinmastodon.android.api.requests.accounts.UpdateAccountCredentials;
 import org.joinmastodon.android.api.requests.instance.GetInstance;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.fragments.account_list.BlockedAccountsListFragment;
+import org.joinmastodon.android.fragments.dm.DmActions;
 import org.joinmastodon.android.fragments.account_list.FollowerListFragment;
 import org.joinmastodon.android.fragments.account_list.FollowingListFragment;
 import org.joinmastodon.android.fragments.account_list.MutedAccountsListFragment;
@@ -863,6 +864,10 @@ public class ProfileFragment extends LoaderFragment implements OnBackPressedList
 		}else{
 			blockDomain.setVisible(false);
 		}
+		// occm DMs only work between accounts on this server
+		MenuItem sendMessage=menu.findItem(R.id.dm_send_message);
+		sendMessage.setVisible(account.isLocal() && !relationship.blocking && !relationship.blockedBy);
+		UiUtils.insetPopupMenuIcon(getContext(), sendMessage);
 		boolean canAddNote = noteWrap.getVisibility()==View.GONE && (relationship.note==null || relationship.note.isEmpty());
 		menu.findItem(R.id.edit_note).setTitle(canAddNote ? R.string.sk_add_note : R.string.sk_delete_note);
 	}
@@ -870,7 +875,9 @@ public class ProfileFragment extends LoaderFragment implements OnBackPressedList
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item){
 		int id=item.getItemId();
-		if(id==R.id.share){
+		if(id==R.id.dm_send_message){
+			DmActions.startConversation(getActivity(), accountID, List.of(account.id));
+		}else if(id==R.id.share){
 			UiUtils.openSystemShareSheet(getActivity(), account);
 		}else if(id==R.id.mute){
 			UiUtils.confirmToggleMuteUser(getActivity(), accountID, account, relationship.muting, this::updateRelationship);

@@ -176,7 +176,7 @@
 			android:tooltipText="@string/dm_chat_rooms_title"
 			android:orientation="vertical">
 
-			<FrameLayout
+			<RelativeLayout
 				android:id="@+id/tab_dm_pill"
 				android:layout_width="match_parent"
 				android:layout_height="32dp"
@@ -184,15 +184,33 @@
 				android:contentDescription="@string/dm_chat_rooms_title">
 
 				<ImageView
+					android:id="@+id/dm_icon"
 					android:layout_width="24dp"
 					android:layout_height="24dp"
-					android:layout_gravity="center"
+					android:layout_centerInParent="true"
 					android:scaleType="center"
 					android:importantForAccessibility="no"
 					android:tint="@color/tab_bar_icon"
 					android:src="@drawable/ic_fluent_chat_24_selector"/>
 
-			</FrameLayout>
+				<!-- occm: number of DM rooms with unread messages -->
+				<TextView
+					android:id="@+id/dm_badge"
+					android:layout_width="wrap_content"
+					android:layout_height="16dp"
+					android:layout_alignTop="@id/dm_icon"
+					android:layout_toEndOf="@id/dm_icon"
+					android:layout_marginTop="-4dp"
+					android:layout_marginStart="-12dp"
+					android:background="@drawable/bg_tabbar_badge"
+					android:textColor="?colorM3OnError"
+					android:gravity="center"
+					android:includeFontPadding="false"
+					android:textAppearance="@style/m3_label_small"
+					android:minWidth="16dp"
+					android:visibility="gone"/>
+
+			</RelativeLayout>
 
 			<TextView
 				android:id="@+id/tab_dm_label"

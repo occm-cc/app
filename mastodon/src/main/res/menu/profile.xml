@@ -4,6 +4,7 @@
 		<item android:id="@+id/edit_note" android:title="@string/sk_add_note" android:icon="@drawable/ic_fluent_notepad_24_regular" android:showAsAction="ifRoom" />
 	</group>
 	<group android:id="@+id/menu_group2">
+		<item android:id="@+id/dm_send_message" android:title="@string/dm_send_message" android:icon="@drawable/ic_fluent_chat_24_regular" android:visible="false"/>
 		<item android:id="@+id/manage_user_lists" android:title="@string/add_user_to_list" android:icon="@drawable/ic_fluent_people_24_regular"/>
 		<item android:id="@+id/mute" android:title="@string/mute_user" android:icon="@drawable/ic_fluent_speaker_off_24_regular"/>
 		<item android:id="@+id/hide_boosts" android:title="@string/hide_boosts_from_user" android:icon="@drawable/ic_fluent_arrow_repeat_all_off_24_regular"/>

@@ -28,6 +28,9 @@ import org.joinmastodon.android.GlobalUserPreferences;
 import org.joinmastodon.android.R;
 import org.joinmastodon.android.api.session.AccountSession;
 import org.joinmastodon.android.api.session.AccountSessionManager;
+import org.joinmastodon.android.api.requests.dm.GetDmUnreadCount;
+import org.joinmastodon.android.events.DmPushReceivedEvent;
+import org.joinmastodon.android.events.DmRoomsChangedEvent;
 import org.joinmastodon.android.events.NotificationsMarkerUpdatedEvent;
 import org.joinmastodon.android.events.StatusDisplaySettingsChangedEvent;
 import org.joinmastodon.android.fragments.discover.DiscoverFragment;
@@ -71,7 +74,7 @@ public class HomeFragment extends AppKitFragment implements OnBackPressedListene
 	private ImageView tabBarAvatar;
 	@IdRes
 	private int currentTab=R.id.tab_home;
-	private TextView notificationsBadge;
+	private TextView notificationsBadge, dmBadge;
 
 	private String accountID;
 
@@ -167,6 +170,8 @@ public class HomeFragment extends AppKitFragment implements OnBackPressedListene
 
 		notificationsBadge=tabBar.findViewById(R.id.notifications_badge);
 		notificationsBadge.setVisibility(View.GONE);
+		dmBadge=tabBar.findViewById(R.id.dm_badge);
+		dmBadge.setVisibility(View.GONE);
 
 		tabBar.selectTab(currentTab);
 
@@ -361,6 +366,38 @@ public class HomeFragment extends AppKitFragment implements OnBackPressedListene
 	protected void onShown(){
 		super.onShown();
 		reloadNotificationsForUnreadCount();
+		reloadDmUnreadCount();
+	}
+
+	/** occm: the DM tab shows how many rooms have unread messages. */
+	public void reloadDmUnreadCount(){
+		new GetDmUnreadCount().setCallback(new Callback<>(){
+			@Override
+			public void onSuccess(GetDmUnreadCount.Result result){
+				if(getActivity()==null || dmBadge==null) return;
+				if(result.count<=0){
+					V.setVisibilityAnimated(dmBadge, View.GONE);
+				}else{
+					dmBadge.setText(result.count>99 ? "99+" : String.valueOf(result.count));
+					V.setVisibilityAnimated(dmBadge, View.VISIBLE);
+				}
+			}
+
+			@Override
+			public void onError(ErrorResponse error){}
+		}).exec(accountID);
+	}
+
+	@Subscribe
+	public void onDmRoomsChanged(DmRoomsChangedEvent ev){
+		if(ev.accountID.equals(accountID))
+			reloadDmUnreadCount();
+	}
+
+	@Subscribe
+	public void onDmPushReceived(DmPushReceivedEvent ev){
+		if(ev.accountID.equals(accountID))
+			reloadDmUnreadCount();
 	}
 
 	public void reloadNotificationsForUnreadCount(){

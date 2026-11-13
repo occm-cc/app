@@ -22,6 +22,25 @@
 	<string name="dm_attach_image">Attach image</string>
 	<string name="dm_emoji">Emoji</string>
 	<string name="dm_remove_attachment">Remove attachment</string>
+	<string name="dm_new_chat">New conversation</string>
+	<string name="dm_pick_people">Choose people</string>
+	<string name="dm_picked">Added</string>
+	<string name="dm_done_with_count">Done (%d)</string>
+	<string name="dm_group_title_prompt">Group name (optional)</string>
+	<string name="dm_create">Create</string>
+	<string name="dm_invite_title">Conversation invite</string>
+	<string name="dm_invite_message">%s invited you to this conversation. Accept to read and send messages.</string>
+	<string name="dm_accept">Accept</string>
+	<string name="dm_decline">Decline</string>
+	<string name="dm_leave">Leave conversation</string>
+	<string name="dm_leave_confirm">You\'ll leave this conversation and stop getting its messages.</string>
+	<string name="dm_rename">Rename</string>
+	<string name="dm_add_members">Invite people</string>
+	<string name="dm_members">Members</string>
+	<string name="dm_delete_message">Delete message</string>
+	<string name="dm_delete_message_confirm">Delete this message for everyone in the conversation?</string>
+	<string name="dm_send_message">Send message</string>
+	<string name="dm_owner">Owner</string>
 	<string name="welcome_occm_title">Welcome</string>
 	<string name="welcome_occm_body">Sign in with your occm.cc account.</string>
 

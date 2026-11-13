@@ -4,6 +4,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -17,6 +20,7 @@ import org.joinmastodon.android.api.MastodonAPIRequest;
 import org.joinmastodon.android.api.requests.dm.GetDmChatRooms;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.events.DmPushReceivedEvent;
+import org.joinmastodon.android.events.DmRoomsChangedEvent;
 import org.joinmastodon.android.fragments.MastodonRecyclerFragment;
 import org.joinmastodon.android.model.Account;
 import org.joinmastodon.android.model.HeaderPaginationList;
@@ -26,6 +30,7 @@ import org.joinmastodon.android.ui.OutlineProviders;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.ArrayList;
 
 import com.squareup.otto.Subscribe;
 
@@ -39,6 +44,7 @@ import me.grishka.appkit.views.UsableRecyclerView;
 
 public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>{
 	private static final long POLL_INTERVAL_MS=20_000;
+	private static final int PICK_PEOPLE_RESULT=8601;
 
 	private String accountID;
 	private String myAccountId;
@@ -58,6 +64,41 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 		accountID=getArguments().getString("account");
 		myAccountId=AccountSessionManager.getInstance().getAccount(accountID).self.id;
 		setTitle(R.string.dm_chat_rooms_title);
+		setHasOptionsMenu(true);
+	}
+
+	@Override
+	public void onCreateOptionsMenu(Menu menu, MenuInflater inflater){
+		MenuItem item=menu.add(0, R.id.dm_new_chat, 0, R.string.dm_new_chat);
+		item.setIcon(R.drawable.ic_fluent_add_24_regular);
+		item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item){
+		if(item.getItemId()==R.id.dm_new_chat){
+			Bundle args=new Bundle();
+			args.putString("account", accountID);
+			Nav.goForResult(getActivity(), DmAccountPickerFragment.class, args, PICK_PEOPLE_RESULT, this);
+			return true;
+		}
+		return super.onOptionsItemSelected(item);
+	}
+
+	@Override
+	public void onFragmentResult(int reqCode, boolean success, Bundle result){
+		if(reqCode==PICK_PEOPLE_RESULT && success && result!=null){
+			ArrayList<String> ids=result.getStringArrayList("accountIds");
+			if(ids!=null && !ids.isEmpty())
+				DmActions.startConversation(getActivity(), accountID, ids);
+		}
+	}
+
+	@Subscribe
+	public void onDmRoomsChanged(DmRoomsChangedEvent ev){
+		if(!ev.accountID.equals(accountID) || getActivity()==null || dataLoading)
+			return;
+		onRefresh();
 	}
 
 	@Override
@@ -203,10 +244,12 @@ public class DmChatRoomListFragment extends MastodonRecyclerFragment<DmChatRoom>
 
 		@Override
 		public void onClick(){
-			Bundle args=new Bundle();
-			args.putString("account", accountID);
-			args.putString("roomUuid", item.uuid);
-			Nav.go(getActivity(), DmChatRoomFragment.class, args);
+			if(!item.accepted){
+				// invites have to be accepted before the room can be read or written to
+				DmActions.showInvite(getActivity(), accountID, item, null);
+				return;
+			}
+			DmActions.openRoom(getActivity(), accountID, item.uuid);
 		}
 	}
 }

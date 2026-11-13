@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<item name="header" type="id"/>
+	<item name="dm_new_chat" type="id"/>
+	<item name="dm_members" type="id"/>
+	<item name="dm_rename" type="id"/>
+	<item name="dm_add_members" type="id"/>
+	<item name="dm_leave" type="id"/>
+	<item name="dm_send_message" type="id"/>
 
 	<item name="profile_posts" type="id"/>
 	<item name="profile_posts_with_replies" type="id"/>

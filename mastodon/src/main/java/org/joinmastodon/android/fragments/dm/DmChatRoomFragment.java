@@ -9,6 +9,9 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -30,13 +33,19 @@ import java.util.List;
 import org.joinmastodon.android.E;
 import org.joinmastodon.android.R;
 import org.joinmastodon.android.api.MastodonAPIRequest;
+import org.joinmastodon.android.api.requests.dm.AddDmChatRoomMembers;
+import org.joinmastodon.android.api.requests.dm.DeleteDmMessage;
 import org.joinmastodon.android.api.requests.dm.GetDmChatRoom;
+import org.joinmastodon.android.api.requests.dm.UpdateDmChatRoom;
 import org.joinmastodon.android.api.requests.dm.GetDmChatRoomMessages;
 import org.joinmastodon.android.api.requests.dm.MarkDmChatRoomRead;
 import org.joinmastodon.android.api.requests.dm.SendDmMessage;
 import org.joinmastodon.android.api.requests.statuses.UploadAttachment;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.events.DmPushReceivedEvent;
+import org.joinmastodon.android.events.DmRoomsChangedEvent;
+import org.joinmastodon.android.fragments.ProfileFragment;
+import org.joinmastodon.android.model.Account;
 import org.joinmastodon.android.fragments.MastodonRecyclerFragment;
 import org.joinmastodon.android.model.Attachment;
 import org.joinmastodon.android.model.Emoji;
@@ -44,6 +53,9 @@ import org.joinmastodon.android.model.HeaderPaginationList;
 import org.joinmastodon.android.model.dm.DmChatRoom;
 import org.joinmastodon.android.model.dm.DmMessage;
 import org.joinmastodon.android.ui.CustomEmojiPopupKeyboard;
+import org.joinmastodon.android.ui.M3AlertDialogBuilder;
+import org.joinmastodon.android.ui.views.TextInputFrameLayout;
+import org.parceler.Parcels;
 import org.joinmastodon.android.ui.OutlineProviders;
 import org.joinmastodon.android.ui.text.HtmlParser;
 import org.joinmastodon.android.ui.utils.UiUtils;
@@ -53,6 +65,7 @@ import java.time.format.FormatStyle;
 
 import com.squareup.otto.Subscribe;
 
+import me.grishka.appkit.Nav;
 import me.grishka.appkit.api.Callback;
 import me.grishka.appkit.api.ErrorResponse;
 import me.grishka.appkit.api.SimpleCallback;
@@ -78,12 +91,14 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 	};
 
 	private static final int REQUEST_CODE_PICK_IMAGE=8471;
+	private static final int PICK_MEMBERS_RESULT=8602;
 	private static final int MAX_IMAGE_PIXELS=2_073_600; // matches ComposeMediaViewController's status media upload cap
 
 	private String accountID;
 	private String roomUuid;
 	private String myAccountId;
 	private String nextMaxID;
+	private DmChatRoom room;
 	private DmMessageAdapter adapter;
 	private EditText messageInput;
 	private ImageButton sendButton;
@@ -117,23 +132,21 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 
 		new GetDmChatRoom(roomUuid).setCallback(new Callback<>(){
 			@Override
-			public void onSuccess(DmChatRoom room){
+			public void onSuccess(DmChatRoom result){
 				if(getActivity()==null) return;
-				String title=room.displayTitle(myAccountId);
-				setTitle(!TextUtils.isEmpty(title) ? title : getString(R.string.mo_app_name));
+				onRoomLoaded(result);
+				if(!result.accepted){
+					// opened through a notification or link before accepting the invite
+					DmActions.showInvite(getActivity(), accountID, result, ()->Nav.finish(DmChatRoomFragment.this));
+				}
 			}
 
 			@Override
 			public void onError(ErrorResponse error){}
 		}).exec(accountID);
+		setHasOptionsMenu(true);
 
-		new MarkDmChatRoomRead(roomUuid).setCallback(new Callback<>(){
-			@Override
-			public void onSuccess(DmChatRoom room){}
-
-			@Override
-			public void onError(ErrorResponse error){}
-		}).exec(accountID);
+		markRead();
 
 		String domain=AccountSessionManager.getInstance().getAccount(accountID).domain;
 		emojiKeyboard=new CustomEmojiPopupKeyboard(getActivity(), accountID, AccountSessionManager.getInstance().getCustomEmojis(domain), domain);
@@ -157,6 +170,162 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 				getActivity().dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL));
 			}
 		});
+	}
+
+	private void markRead(){
+		new MarkDmChatRoomRead(roomUuid).setCallback(new Callback<>(){
+			@Override
+			public void onSuccess(DmChatRoom result){
+				// unread dot in the room list and the tab badge
+				E.post(new DmRoomsChangedEvent(accountID));
+			}
+
+			@Override
+			public void onError(ErrorResponse error){}
+		}).exec(accountID);
+	}
+
+	private void onRoomLoaded(DmChatRoom result){
+		room=result;
+		String title=room.displayTitle(myAccountId);
+		setTitle(!TextUtils.isEmpty(title) ? title : getString(R.string.mo_app_name));
+		invalidateOptionsMenu();
+	}
+
+	private boolean isOwner(){
+		return room!=null && room.owner!=null && myAccountId.equals(room.owner.id);
+	}
+
+	@Override
+	public void onCreateOptionsMenu(Menu menu, MenuInflater inflater){
+		if(room==null) return;
+		menu.add(0, R.id.dm_members, 0, R.string.dm_members);
+		if(isOwner() && room.roomType==DmChatRoom.RoomType.GROUP_CHAT){
+			menu.add(0, R.id.dm_rename, 0, R.string.dm_rename);
+			menu.add(0, R.id.dm_add_members, 0, R.string.dm_add_members);
+		}
+		menu.add(0, R.id.dm_leave, 0, R.string.dm_leave);
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item){
+		int id=item.getItemId();
+		if(id==R.id.dm_members){
+			showMembers();
+		}else if(id==R.id.dm_rename){
+			showRenameDialog();
+		}else if(id==R.id.dm_add_members){
+			Bundle args=new Bundle();
+			args.putString("account", accountID);
+			ArrayList<String> current=new ArrayList<>();
+			if(room.participants!=null)
+				for(Account a:room.participants) current.add(a.id);
+			args.putStringArrayList("excludeIds", current);
+			Nav.goForResult(getActivity(), DmAccountPickerFragment.class, args, PICK_MEMBERS_RESULT, this);
+		}else if(id==R.id.dm_leave){
+			DmActions.confirmLeave(getActivity(), accountID, roomUuid, ()->Nav.finish(this));
+		}else{
+			return super.onOptionsItemSelected(item);
+		}
+		return true;
+	}
+
+	private void showMembers(){
+		List<Account> members=room.participants!=null ? room.participants : List.of();
+		String[] names=new String[members.size()];
+		for(int i=0;i<members.size();i++){
+			Account a=members.get(i);
+			String name=(!TextUtils.isEmpty(a.displayName) ? a.displayName : a.username)+" (@"+a.acct+")";
+			if(room.owner!=null && room.owner.id.equals(a.id))
+				name+=" · "+getString(R.string.dm_owner);
+			names[i]=name;
+		}
+		new M3AlertDialogBuilder(getActivity())
+				.setTitle(R.string.dm_members)
+				.setItems(names, (dlg, which)->{
+					Bundle args=new Bundle();
+					args.putString("account", accountID);
+					args.putParcelable("profileAccount", Parcels.wrap(members.get(which)));
+					Nav.go(getActivity(), ProfileFragment.class, args);
+				})
+				.setPositiveButton(R.string.ok, null)
+				.show();
+	}
+
+	private void showRenameDialog(){
+		TextInputFrameLayout input=new TextInputFrameLayout(getActivity(), null, 0, 0, getString(R.string.dm_group_title_prompt), room.title);
+		new M3AlertDialogBuilder(getActivity())
+				.setTitle(R.string.dm_rename)
+				.setView(input)
+				.setPositiveButton(R.string.save, (dlg, which)->new UpdateDmChatRoom(roomUuid, input.getEditText().getText().toString().trim())
+						.setCallback(new Callback<>(){
+							@Override
+							public void onSuccess(DmChatRoom result){
+								if(getActivity()==null) return;
+								onRoomLoaded(result);
+								E.post(new DmRoomsChangedEvent(accountID));
+							}
+
+							@Override
+							public void onError(ErrorResponse error){
+								if(getActivity()!=null) error.showToast(getActivity());
+							}
+						})
+						.wrapProgress(getActivity(), R.string.loading, true)
+						.exec(accountID))
+				.setNegativeButton(R.string.cancel, null)
+				.show();
+	}
+
+	@Override
+	public void onFragmentResult(int reqCode, boolean success, Bundle result){
+		if(reqCode!=PICK_MEMBERS_RESULT || !success || result==null) return;
+		ArrayList<String> ids=result.getStringArrayList("accountIds");
+		if(ids==null || ids.isEmpty()) return;
+		new AddDmChatRoomMembers(roomUuid, ids)
+				.setCallback(new Callback<>(){
+					@Override
+					public void onSuccess(DmChatRoom updated){
+						if(getActivity()==null) return;
+						onRoomLoaded(updated);
+						E.post(new DmRoomsChangedEvent(accountID));
+					}
+
+					@Override
+					public void onError(ErrorResponse error){
+						if(getActivity()!=null) error.showToast(getActivity());
+					}
+				})
+				.wrapProgress(getActivity(), R.string.loading, true)
+				.exec(accountID);
+	}
+
+	private void confirmDeleteMessage(DmMessage message){
+		new M3AlertDialogBuilder(getActivity())
+				.setTitle(R.string.dm_delete_message)
+				.setMessage(R.string.dm_delete_message_confirm)
+				.setPositiveButton(R.string.delete, (dlg, which)->new DeleteDmMessage(roomUuid, message.id)
+						.setCallback(new Callback<>(){
+							@Override
+							public void onSuccess(Object result){
+								if(getActivity()==null) return;
+								int index=data.indexOf(message);
+								if(index>=0){
+									data.remove(index);
+									adapter.notifyDataSetChanged();
+								}
+								E.post(new DmRoomsChangedEvent(accountID));
+							}
+
+							@Override
+							public void onError(ErrorResponse error){
+								if(getActivity()!=null) error.showToast(getActivity());
+							}
+						})
+						.wrapProgress(getActivity(), R.string.loading, true)
+						.exec(accountID))
+				.setNegativeButton(R.string.cancel, null)
+				.show();
 	}
 
 	private void insertTextAtCursor(String text){
@@ -336,13 +505,7 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 					sortAndRefreshList();
 					if(wasAtLatest){
 						list.scrollToPosition(0);
-						new MarkDmChatRoomRead(roomUuid).setCallback(new Callback<>(){
-							@Override
-							public void onSuccess(DmChatRoom room){}
-
-							@Override
-							public void onError(ErrorResponse error){}
-						}).exec(accountID);
+						markRead();
 					}else{
 						// User scrolled up to read history - don't yank them back down, just
 						// let them know new messages arrived below.
@@ -462,6 +625,14 @@ public class DmChatRoomFragment extends MastodonRecyclerFragment<DmMessage>{
 		@Override
 		public void onBind(DmMessage item){
 			boolean mine=item.account!=null && item.account.id.equals(myAccountId);
+			// own messages can be deleted (hidden for everyone) with a long press
+			View.OnLongClickListener deleteListener=mine ? v->{
+				confirmDeleteMessage(item);
+				return true;
+			} : null;
+			content.setOnLongClickListener(deleteListener);
+			attachments.setOnLongClickListener(deleteListener);
+			content.setLongClickable(mine);
 
 			android.widget.FrameLayout.LayoutParams params=(android.widget.FrameLayout.LayoutParams) bubbleContainer.getLayoutParams();
 			params.gravity=mine ? android.view.Gravity.END : android.view.Gravity.START;
