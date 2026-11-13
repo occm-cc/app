@@ -204,6 +204,12 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 	private View spoilerWrap;
 	private boolean hasSpoiler;
 	private boolean sensitive;
+	/**
+	 * Whether the sensitive-media toggle was set by the user (or loaded from an existing post).
+	 * While false, the toggle follows the content warning: turning CW on marks attached media as
+	 * sensitive. The server no longer derives sensitive from the CW when the client sends it.
+	 */
+	private boolean sensitiveSetByUser;
 	private Instant scheduledAt = null;
 	private ProgressBar sendProgress;
 	private View sendingOverlay;
@@ -475,6 +481,9 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 
 		sensitive = savedInstanceState==null && editingStatus != null ? editingStatus.sensitive
 				: savedInstanceState!=null && savedInstanceState.getBoolean("sensitive", false);
+		// keep an existing post's choice instead of re-deriving it from the CW
+		sensitiveSetByUser = savedInstanceState==null ? editingStatus != null
+				: savedInstanceState.getBoolean("sensitiveSetByUser", false);
 		if (sensitive) {
 			sensitiveBtn.setVisibility(View.VISIBLE);
 			sensitiveBtn.setSelected(true);
@@ -507,10 +516,12 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 			} catch (IllegalArgumentException ignored) {}
 		}
 
+		// OCCM: "server default" can't be picked; posts without a stored type are plain text
+		contentType=ContentType.selectableOrPlain(contentType, instance);
 		int typeIndex=contentType.ordinal();
 		if (contentTypePopup.getMenu().findItem(typeIndex) != null)
 			contentTypePopup.getMenu().findItem(typeIndex).setChecked(true);
-		contentTypeBtn.setSelected(typeIndex != ContentType.UNSPECIFIED.ordinal() && typeIndex != ContentType.PLAIN.ordinal());
+		contentTypeBtn.setSelected(typeIndex != ContentType.PLAIN.ordinal());
 
 		autocompleteViewController=new ComposeAutocompleteViewController(getActivity(), accountID);
 		autocompleteViewController.setCompletionSelectedListener(new ComposeAutocompleteViewController.AutocompleteListener(){
@@ -551,6 +562,8 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		pollViewController.onSaveInstanceState(outState);
 		mediaViewController.onSaveInstanceState(outState);
 		outState.putBoolean("hasSpoiler", hasSpoiler);
+		outState.putBoolean("sensitive", sensitive);
+		outState.putBoolean("sensitiveSetByUser", sensitiveSetByUser);
 		outState.putSerializable("visibility", statusVisibility);
 		outState.putParcelable("postLang", Parcels.wrap(postLang));
 		if(currentAutocompleteSpan!=null){
@@ -1159,7 +1172,10 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		req.status=text;
 		req.localOnly=localOnly;
 		req.visibility=localOnly && instance.isAkkoma() ? StatusPrivacy.LOCAL : statusVisibility;
-		req.sensitive=sensitive;
+		// Only send sensitive when there's media: with media, the toggle decides on its own (the
+		// server keeps CW and sensitive independent when it's sent); without media, leaving it
+		// out lets the server apply its default.
+		req.sensitive=mediaViewController.isEmpty() ? null : sensitive;
 		req.contentType=contentType==ContentType.UNSPECIFIED ? null : contentType;
 		req.scheduledAt=scheduledAt;
 		req.preview=preview;
@@ -1210,7 +1226,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 						if (result == null) {
 							editedStatus.text = req.status;
 							editedStatus.spoilerText = req.spoilerText;
-							editedStatus.sensitive = req.sensitive;
+							editedStatus.sensitive = req.sensitive != null && req.sensitive;
 							editedStatus.language = req.language;
 							// user will have to reload to see html
 							editedStatus.content = req.status;
@@ -1522,13 +1538,21 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 
 	private void toggleSensitive() {
 		sensitive=!sensitive;
+		sensitiveSetByUser=true;
 		sensitiveBtn.setSelected(sensitive);
 	}
 
 	public void updateSensitive() {
-		sensitiveBtn.setVisibility(View.GONE);
-		if (!mediaViewController.isEmpty()) sensitiveBtn.setVisibility(View.VISIBLE);
-		if (mediaViewController.isEmpty()) sensitive = false;
+		boolean hasMedia=!mediaViewController.isEmpty();
+		sensitiveBtn.setVisibility(hasMedia ? View.VISIBLE : View.GONE);
+		if(!hasMedia){
+			sensitive=false;
+			sensitiveSetByUser=false; // new media starts following the CW again
+		}else if(!sensitiveSetByUser){
+			// CW on -> media hidden by default; the user can still turn it off
+			sensitive=hasSpoiler;
+		}
+		sensitiveBtn.setSelected(sensitive);
 	}
 
 	private void pickScheduledDateTime() {
@@ -1672,23 +1696,16 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 			m.add(0, value.ordinal(), Menu.NONE, value.getName());
 		}
 		m.setGroupCheckable(0, true, true);
-		if (contentType!=ContentType.UNSPECIFIED || editingStatus!=null){
-			// setting content type to null while editing will just leave it unchanged
-			m.findItem(ContentType.UNSPECIFIED.ordinal()).setVisible(false);
-		}
 
 		contentTypePopup.setOnMenuItemClickListener(i->{
 			uuid=null;
 			int index=i.getItemId();
 			contentType=ContentType.values()[index];
-			btn.setSelected(index!=ContentType.UNSPECIFIED.ordinal() && index!=ContentType.PLAIN.ordinal());
+			btn.setSelected(index!=ContentType.PLAIN.ordinal());
 			i.setChecked(true);
 			return true;
 		});
-
-		if (!AccountSessionManager.get(accountID).getLocalPreferences().contentTypesEnabled) {
-			btn.setVisibility(View.GONE);
-		}
+		// OCCM: post formatting is always available, so the button is never hidden
 	}
 
 	private void onVisibilityClick(View v){

@@ -31,7 +31,9 @@ public class SettingsInstanceFragment extends BaseSettingsFragment<Void> impleme
 	// wanted back later, along with their wiring in onCreate/onHidden and their click handlers
 	// further down in this file.
 	// private CheckableListItem<Void> contentTypesItem, emojiReactionsItem, localOnlyItem, glitchModeItem;
-	// private ListItem<Void> defaultContentTypeItem, showEmojiReactionsItem;
+	// private ListItem<Void> showEmojiReactionsItem;
+	// Post formatting itself is always on (no toggle), but the default format can be picked.
+	private ListItem<Void> defaultContentTypeItem;
 	private AccountLocalPreferences lp;
 
 	@Override
@@ -44,7 +46,8 @@ public class SettingsInstanceFragment extends BaseSettingsFragment<Void> impleme
 				new ListItem<>(AccountSessionManager.get(accountID).domain, getString(R.string.settings_server_explanation), R.drawable.ic_fluent_server_24_regular, this::onServerClick),
 				new ListItem<>(R.string.sk_settings_profile, 0, R.drawable.ic_fluent_open_24_regular, i->UiUtils.launchWebBrowser(getActivity(), "https://"+s.domain+"/settings/profile")),
 				new ListItem<>(R.string.sk_settings_posting, 0, R.drawable.ic_fluent_open_24_regular, i->UiUtils.launchWebBrowser(getActivity(), "https://"+s.domain+"/settings/preferences/other")),
-				new ListItem<>(R.string.sk_settings_auth, 0, R.drawable.ic_fluent_open_24_regular, i->UiUtils.launchWebBrowser(getActivity(), "https://"+s.domain+"/auth/edit"), 0, true)
+				new ListItem<>(R.string.sk_settings_auth, 0, R.drawable.ic_fluent_open_24_regular, i->UiUtils.launchWebBrowser(getActivity(), "https://"+s.domain+"/auth/edit"), 0, true),
+				defaultContentTypeItem=new ListItem<>(R.string.sk_settings_default_content_type, lp.defaultContentType.getName(), R.drawable.ic_fluent_text_bold_24_regular, this::onDefaultContentTypeClick, 0, true)
 				// emojiReactionsItem=new CheckableListItem<>(R.string.sk_settings_emoji_reactions, R.string.sk_settings_emoji_reactions_explanation, CheckableListItem.Style.SWITCH, lp.emojiReactionsEnabled, R.drawable.ic_fluent_emoji_laugh_24_regular, i->onEmojiReactionsClick()),
 				// showEmojiReactionsItem=new ListItem<>(R.string.sk_settings_show_emoji_reactions, getShowEmojiReactionsString(), R.drawable.ic_fluent_emoji_24_regular, this::onShowEmojiReactionsClick, 0, true),
 				// localOnlyItem=new CheckableListItem<>(R.string.sk_settings_support_local_only, R.string.sk_settings_local_only_explanation, CheckableListItem.Style.SWITCH, lp.localOnlySupported, R.drawable.ic_fluent_eye_24_regular, i->onLocalOnlyClick()),
@@ -98,31 +101,33 @@ public class SettingsInstanceFragment extends BaseSettingsFragment<Void> impleme
 	// 			: ContentType.PLAIN : ContentType.UNSPECIFIED;
 	// 	defaultContentTypeItem.subtitleRes=lp.defaultContentType.getName();
 	// }
-	//
-	// private void onDefaultContentTypeClick(ListItem<?> item_){
-	// 	List<ContentType> supportedContentTypes=Arrays.stream(ContentType.values())
-	// 			.filter(t->t.supportedByInstance(getInstance().orElse(null)))
-	// 			.collect(Collectors.toList());
-	// 	int selected=supportedContentTypes.indexOf(lp.defaultContentType);
-	// 	int[] newSelected={selected};
-	// 	String[] names=supportedContentTypes.stream()
-	// 			.map(ContentType::getName)
-	// 			.map(this::getString)
-	// 			.toArray(String[]::new);
-	//
-	// 	new M3AlertDialogBuilder(getActivity())
-	// 			.setTitle(R.string.sk_settings_default_content_type)
-	// 			.setSingleChoiceItems(names,
-	// 					selected, (dlg, item)->newSelected[0]=item)
-	// 			.setPositiveButton(R.string.ok, (dlg, item)->{
-	// 				ContentType type=supportedContentTypes.get(newSelected[0]);
-	// 				lp.defaultContentType=type;
-	// 				defaultContentTypeItem.subtitleRes=type.getName();
-	// 				rebindItem(defaultContentTypeItem);
-	// 			})
-	// 			.setNegativeButton(R.string.cancel, null)
-	// 			.show();
-	// }
+
+	private void onDefaultContentTypeClick(ListItem<?> item_){
+		List<ContentType> supportedContentTypes=Arrays.stream(ContentType.values())
+				.filter(t->t.supportedByInstance(getInstance().orElse(null)))
+				.collect(Collectors.toList());
+		int selected=supportedContentTypes.indexOf(lp.defaultContentType);
+		int[] newSelected={selected};
+		String[] names=supportedContentTypes.stream()
+				.map(ContentType::getName)
+				.map(this::getString)
+				.toArray(String[]::new);
+
+		new M3AlertDialogBuilder(getActivity())
+				.setTitle(R.string.sk_settings_default_content_type)
+				.setSingleChoiceItems(names,
+						selected, (dlg, item)->newSelected[0]=item)
+				.setPositiveButton(R.string.ok, (dlg, item)->{
+					if(newSelected[0]<0) return;
+					ContentType type=supportedContentTypes.get(newSelected[0]);
+					lp.defaultContentType=type;
+					lp.save();
+					defaultContentTypeItem.subtitleRes=type.getName();
+					rebindItem(defaultContentTypeItem);
+				})
+				.setNegativeButton(R.string.cancel, null)
+				.show();
+	}
 	//
 	// private void onShowEmojiReactionsClick(ListItem<?> item_){
 	// 	int selected=lp.showEmojiReactions.ordinal();

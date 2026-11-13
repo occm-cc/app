@@ -38,7 +38,8 @@ public class CreateStatus extends MastodonAPIRequest<Status>{
 		public List<String> mediaIds;
 		public Poll poll;
 		public String inReplyToId;
-		public boolean sensitive;
+		/** null = not sent; the server then derives it (default setting / content warning) */
+		public Boolean sensitive;
 		public boolean localOnly;
 		public String spoilerText;
 		public StatusPrivacy visibility;

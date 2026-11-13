@@ -79,8 +79,12 @@ public class AccountLocalPreferences{
 		showBoosts=prefs.getBoolean("showBoosts", true);
 		recentLanguages=fromJson(prefs.getString("recentLanguages", null), recentLanguagesType, new ArrayList<>());
 		bottomEncoding=prefs.getBoolean("bottomEncoding", false);
-		defaultContentType=enumValue(ContentType.class, prefs.getString("defaultContentType", instance.map(Instance::isIceshrimp).orElse(false) ? ContentType.MISSKEY_MARKDOWN.name() : ContentType.PLAIN.name()));
-		contentTypesEnabled=prefs.getBoolean("contentTypesEnabled", false);
+		// OCCM: post formatting (plain/markdown/html) is always on - there's no toggle for it,
+		// and "server default" (UNSPECIFIED) can't be picked, so older saved values map to PLAIN.
+		defaultContentType=ContentType.selectableOrPlain(
+				enumValue(ContentType.class, prefs.getString("defaultContentType", ContentType.PLAIN.name())),
+				instance.orElse(null));
+		contentTypesEnabled=true;
 		timelines=fromJson(prefs.getString("timelines", null), timelinesType, TimelineDefinition.getDefaultTimelines(session.getID()));
 		localOnlySupported=prefs.getBoolean("localOnlySupported", false);
 		glitchInstance=prefs.getBoolean("glitchInstance", false);
