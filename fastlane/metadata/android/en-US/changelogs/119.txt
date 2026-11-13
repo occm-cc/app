@@ -1,0 +1,5 @@
+- Markdown/HTML post formatting is always available; content warnings now mark attached media sensitive by default
+- Server and follower announcements are shown separately
+- Protected account setting
+- DMs: start conversations and groups, accept/decline invites, leave, rename, invite or remove members, delete messages, unread badge, real-time updates (can be turned off)
+- Scheduled posts are edited in place; posts you replied to are highlighted
